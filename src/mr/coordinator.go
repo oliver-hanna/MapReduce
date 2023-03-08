@@ -37,14 +37,18 @@ type Coordinator struct {
 }
 
 type MapJob struct {
-	FileName     string
-	Status       int
+	FileName string
+	Status   int
+	// Used in timeout function to signal completion.
+	// struct{} is used as we don't care about sending a particular value.
 	FinishSignal chan struct{}
 }
 
 type ReduceJob struct {
-	Files        []string
-	Status       int
+	Files  []string
+	Status int
+	// Used in timeout function to signal completion.
+	// struct{} is used as we don't care about sending a particular value.
 	FinishSignal chan struct{}
 }
 
@@ -149,13 +153,14 @@ func (c *Coordinator) timeMapJob(id int) {
 	// defer close(c.mapProgress[id].FinishSignal)
 	for {
 		select {
+		case <-c.mapProgress[id].FinishSignal:
+			// Task signaled finished, exit early
+			return
 		case <-ticker.C:
 			c.mux.Lock()
 			defer c.mux.Unlock()
 			c.mapProgress[id].Status = NotStarted
 			c.mapTasksInProgress--
-			return
-		case <-c.mapProgress[id].FinishSignal:
 			return
 		default:
 			// Could sleep a bit here to reduce how often this loop
@@ -171,13 +176,14 @@ func (c *Coordinator) timeReduceJob(id int) {
 	// defer close(c.reduceProgress[id].FinishSignal)
 	for {
 		select {
+		case <-c.reduceProgress[id].FinishSignal:
+			// Task signaled finished, exit early
+			return
 		case <-ticker.C:
 			c.mux.Lock()
 			defer c.mux.Unlock()
 			c.reduceProgress[id].Status = NotStarted
 			c.reduceTasksInProgress--
-			return
-		case <-c.reduceProgress[id].FinishSignal:
 			return
 		default:
 			// Could sleep a bit here to reduce how often this loop
